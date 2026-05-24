@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String       @id @default(cuid())
+  name        String?
+  email       String       @unique
+  password    String?
+  image       String?
+  competitors Competitor[]
+  savedAds    SavedAd[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Competitor {
+  id        String   @id @default(cuid())
+  name      String
+  website   String?
+  metaAdUrl String?
+  logo      String?
+  industry  String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ads       Ad[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, userId])
+}
+
+model Ad {
+  id           String     @id @default(cuid())
+  competitorId String
+  competitor   Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  headline     String
+  body         String?
+  cta          String?
+  imageUrl     String?
+  landingUrl   String?
+  hookType     String?
+  angleType    String?
+  formatType   String?
+  offerType    String?
+  platform     String     @default("meta")
+  isActive     Boolean    @default(true)
+  firstSeen    DateTime   @default(now())
+  lastSeen     DateTime   @default(now())
+  savedAds     SavedAd[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model SavedAd {
+  id        String   @id @default(cuid())
+  userId    String
+  adId      String
+  notes     String?
+  tags      String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, adId])
+}
+
+model Insight {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String
+  confidence  Float
+  competitors String
+  tags        String
+  category    String   @default("trend")
+  isNew       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
