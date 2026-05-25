@@ -120,6 +120,12 @@ function renderActive(pageId, ads, tab) {
     }
   };
 
+  // Check interceptor status and show in footer
+  chrome.runtime.sendMessage({ type: "CHECK_INTERCEPTOR", tabId: tab.id }, (res) => {
+    const el = document.getElementById("interceptor-status");
+    if (el) el.textContent = res?.active ? "✓ interceptor on" : "✗ interceptor off";
+  });
+
   // Poll for new ads every 2s while popup is open
   const interval = setInterval(async () => {
     const fresh = await getAds(pageId);

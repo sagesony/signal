@@ -1,15 +1,8 @@
 /**
  * background.js — service worker
- *
- * Two jobs:
- *  1. Inject the fetch interceptor into the page's main world using
- *     chrome.scripting.executeScript — the ONLY way that bypasses
- *     Facebook's strict Content-Security-Policy.
- *  2. Accumulate captured ads in chrome.storage.session and handle
- *     sync requests from popup.js.
  */
 
-// ── 1. Inject interceptor whenever Ad Library tab loads ───────────────────────
+// ── Inject interceptor when Ad Library tab loads ──────────────────────────────
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (
@@ -17,88 +10,22 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     tab.url &&
     tab.url.includes("facebook.com/ads/library")
   ) {
-    chrome.scripting
-      .executeScript({
-        target: { tabId },
-        world: "MAIN",          // runs in the page's JS context, bypasses CSP
-        func: pageInterceptor,
-        injectImmediately: true,
-      })
-      .catch(() => {}); // tab may have navigated away — ignore
+    injectIntoTab(tabId);
   }
 });
 
-/**
- * This function is serialised by Chrome and injected into the page.
- * It MUST be self-contained — no references to outer scope.
- */
-function pageInterceptor() {
-  if (window.__signalIntercepted) return;
-  window.__signalIntercepted = true;
-
-  const _fetch = window.fetch;
-  window.fetch = async function (...args) {
-    const response = await _fetch.apply(this, args);
-    try {
-      const url =
-        typeof args[0] === "string"
-          ? args[0]
-          : args[0] && args[0].url
-          ? args[0].url
-          : "";
-
-      if (url.indexOf("/api/graphql") !== -1) {
-        const clone = response.clone();
-        clone.text().then(function (text) {
-          if (
-            text.indexOf("adArchiveID") !== -1 ||
-            text.indexOf("ad_archive_id") !== -1
-          ) {
-            const p = new URLSearchParams(window.location.search);
-            const pageId =
-              p.get("view_all_page_id") || p.get("advertiser_id");
-            if (pageId) {
-              window.postMessage(
-                { __signal: true, type: "ADS_RAW", text: text, pageId: pageId },
-                "*"
-              );
-            }
-          }
-        });
-      }
-    } catch (_) {}
-    return response;
-  };
-}
-
-// ── 2. Also inject on demand from content.js (backup for already-loaded tabs) ─
-
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "INJECT_INTERCEPTOR" && sender.tab?.id) {
-    chrome.scripting
-      .executeScript({
-        target: { tabId: sender.tab.id },
-        world: "MAIN",
-        func: pageInterceptor,
-        injectImmediately: true,
-      })
-      .catch(() => {});
+    injectIntoTab(sender.tab.id);
     return false;
   }
 
   if (msg.type === "ADS_CAPTURED") {
-    const { pageId, ads } = msg;
-    storeMerge(pageId, ads).then(() => {
+    storeMerge(msg.pageId, msg.ads).then(() => {
       if (sender.tab?.id) {
-        getStored(pageId).then((stored) => {
-          chrome.action.setBadgeText({
-            text: String(stored.length),
-            tabId: sender.tab.id,
-          });
-          chrome.action.setBadgeBackgroundColor({
-            color: "#6366f1",
-            tabId: sender.tab.id,
-          });
+        getStored(msg.pageId).then((stored) => {
+          chrome.action.setBadgeText({ text: String(stored.length), tabId: sender.tab.id });
+          chrome.action.setBadgeBackgroundColor({ color: "#6366f1", tabId: sender.tab.id });
         });
       }
     });
@@ -111,8 +38,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === "SYNC_ADS") {
-    const { pageId, ads, signalUrl, apiKey } = msg;
-    syncToSignal(pageId, ads, signalUrl, apiKey).then(sendResponse);
+    syncToSignal(msg.pageId, msg.ads, msg.signalUrl, msg.apiKey).then(sendResponse);
     return true;
   }
 
@@ -120,45 +46,110 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     clearStored(msg.pageId).then(() => sendResponse({ ok: true }));
     return true;
   }
+
+  if (msg.type === "CHECK_INTERCEPTOR") {
+    chrome.scripting.executeScript({
+      target: { tabId: msg.tabId },
+      world: "MAIN",
+      func: () => window.__signalIntercepted === true,
+    }).then((results) => sendResponse({ active: results?.[0]?.result === true }))
+      .catch((e) => sendResponse({ active: false, error: e.message }));
+    return true;
+  }
 });
 
-// ── Storage helpers ───────────────────────────────────────────────────────────
+function injectIntoTab(tabId) {
+  chrome.scripting
+    .executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: pageInterceptor,
+      injectImmediately: true,
+    })
+    .catch(() => {});
+}
+
+// ── Page interceptor — injected into the page's main world ───────────────────
+// Intercepts both fetch AND XMLHttpRequest so we catch Meta's GraphQL calls
+// regardless of which API they use internally.
+
+function pageInterceptor() {
+  if (window.__signalIntercepted) return;
+  window.__signalIntercepted = true;
+  console.log("[Signal] interceptor active ✓");
+
+  function handle(url, text) {
+    if (!url || (url.indexOf("graphql") === -1)) return;
+    if (text.indexOf("adArchiveID") === -1 && text.indexOf("ad_archive_id") === -1) return;
+
+    var p = new URLSearchParams(window.location.search);
+    var pageId = p.get("view_all_page_id") || p.get("advertiser_id");
+    if (!pageId) return;
+
+    console.log("[Signal] captured GraphQL response, pageId=" + pageId + " len=" + text.length);
+    window.postMessage({ __signal: true, type: "ADS_RAW", text: text, pageId: pageId }, "*");
+  }
+
+  // ── fetch override ───────────────────────────────────────────────────────
+  var _fetch = window.fetch;
+  window.fetch = function () {
+    var args = Array.prototype.slice.call(arguments);
+    return _fetch.apply(this, args).then(function (response) {
+      try {
+        var url = typeof args[0] === "string" ? args[0] : (args[0] && args[0].url ? args[0].url : "");
+        response.clone().text().then(function (text) { handle(url, text); });
+      } catch (_) {}
+      return response;
+    });
+  };
+
+  // ── XMLHttpRequest override ──────────────────────────────────────────────
+  var _open = XMLHttpRequest.prototype.open;
+  var _send = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this._signalURL = url;
+    return _open.apply(this, arguments);
+  };
+
+  XMLHttpRequest.prototype.send = function () {
+    var self = this;
+    this.addEventListener("load", function () {
+      try { handle(self._signalURL || self.responseURL || "", self.responseText); } catch (_) {}
+    });
+    return _send.apply(this, arguments);
+  };
+}
+
+// ── Storage ───────────────────────────────────────────────────────────────────
 
 async function getStored(pageId) {
-  const key = `ads_${pageId}`;
-  const result = await chrome.storage.session.get(key);
-  return result[key] ?? [];
+  const r = await chrome.storage.session.get("ads_" + pageId);
+  return r["ads_" + pageId] ?? [];
 }
 
 async function storeMerge(pageId, newAds) {
   const existing = await getStored(pageId);
   const seen = new Set(existing.map((a) => a.externalId));
-  const merged = [
-    ...existing,
-    ...newAds.filter((a) => !seen.has(a.externalId)),
-  ];
-  await chrome.storage.session.set({ [`ads_${pageId}`]: merged });
+  const merged = [...existing, ...newAds.filter((a) => !seen.has(a.externalId))];
+  await chrome.storage.session.set({ ["ads_" + pageId]: merged });
 }
 
 async function clearStored(pageId) {
-  await chrome.storage.session.remove(`ads_${pageId}`);
+  await chrome.storage.session.remove("ads_" + pageId);
 }
 
 // ── Signal API sync ───────────────────────────────────────────────────────────
 
 async function syncToSignal(pageId, ads, signalUrl, apiKey) {
   try {
-    const res = await fetch(`${signalUrl}/api/ads/import`, {
+    const res = await fetch(signalUrl + "/api/ads/import", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-signal-key": apiKey,
-      },
+      headers: { "Content-Type": "application/json", "x-signal-key": apiKey },
       body: JSON.stringify({ pageId, ads }),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data.error ?? "Sync failed" };
-    return data;
+    return res.ok ? data : { error: data.error ?? "Sync failed" };
   } catch (e) {
     return { error: e.message ?? "Network error" };
   }
