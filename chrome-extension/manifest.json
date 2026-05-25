@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Signal – Meta Ad Sync",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Sync competitor ads from Meta Ad Library directly into Signal.",
   "permissions": ["storage", "scripting", "tabs"],
   "host_permissions": [

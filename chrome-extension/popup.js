@@ -1,31 +1,73 @@
 /**
  * popup.js
  * Runs when the extension popup opens.
+ * Auto-connects to Signal using the user's existing browser session —
+ * no manual API key required.
  */
 
 const SIGNAL_URL = "https://signal-theta-one.vercel.app";
 
-// ── DOM refs ──────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+
 const views = {
-  setup:   document.getElementById("view-setup"),
-  idle:    document.getElementById("view-idle"),
-  active:  document.getElementById("view-active"),
-  success: document.getElementById("view-success"),
+  loading:    document.getElementById("view-loading"),
+  login:      document.getElementById("view-login"),
+  idle:       document.getElementById("view-idle"),
+  active:     document.getElementById("view-active"),
+  success:    document.getElementById("view-success"),
 };
 
-const $ = (id) => document.getElementById(id);
+function show(name) {
+  Object.entries(views).forEach(([k, el]) => {
+    if (el) el.style.display = k === name ? "" : "none";
+  });
+}
+
+// ── Auto-connect using Signal session cookie ───────────────────────────────────
+async function fetchApiKey() {
+  try {
+    // Fetch settings — the browser includes the Signal session cookie automatically
+    // because the extension has host_permissions for signal-theta-one.vercel.app
+    const res = await fetch(`${SIGNAL_URL}/api/settings`, { credentials: "include" });
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    // If key already exists, return it
+    if (data.extensionKey) return data.extensionKey;
+
+    // Auto-generate one silently
+    const gen = await fetch(`${SIGNAL_URL}/api/settings`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ generateExtensionKey: true }),
+    });
+    if (!gen.ok) return null;
+    const genData = await gen.json();
+    return genData.extensionKey || null;
+  } catch (_) {
+    return null;
+  }
+}
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 (async function init() {
-  const { apiKey } = await chrome.storage.local.get("apiKey");
+  show("loading");
+
+  // Check for a cached key first (fast path)
+  let { apiKey } = await chrome.storage.local.get("apiKey");
 
   if (!apiKey) {
-    show("setup");
-    return;
+    // Try to auto-connect via Signal session
+    apiKey = await fetchApiKey();
+    if (apiKey) {
+      await chrome.storage.local.set({ apiKey });
+    } else {
+      // Not logged in to Signal — show login prompt
+      show("login");
+      return;
+    }
   }
-
-  $("connected-as").textContent = "Connected";
-  $("disconnect-link").style.display = "block";
 
   // Check active tab
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -42,22 +84,14 @@ const $ = (id) => document.getElementById(id);
     return;
   }
 
-  // Load captured ads for this page
-  // Proactively re-inject interceptor — handles the case where the extension
-  // was reloaded but the Ad Library tab wasn't refreshed.
+  // Re-inject interceptor in case extension was reloaded without page refresh
   chrome.runtime.sendMessage({ type: "INJECT_INTERCEPTOR", tabId: tab.id });
 
   const ads = await getAds(pageId);
   renderActive(pageId, ads, tab);
 })();
 
-// ── Views ─────────────────────────────────────────────────────────────────────
-function show(name) {
-  Object.entries(views).forEach(([k, el]) => {
-    el.style.display = k === name ? "" : "none";
-  });
-}
-
+// ── Active view ───────────────────────────────────────────────────────────────
 function renderActive(pageId, ads, tab) {
   show("active");
 
@@ -84,14 +118,11 @@ function renderActive(pageId, ads, tab) {
       "Ads are captured as they load. Wait a moment or scroll to trigger loading.";
   }
 
-  // Sync button
   syncBtn.onclick = async () => {
     const { apiKey } = await chrome.storage.local.get("apiKey");
     syncBtn.disabled = true;
     syncBtn.innerHTML = `<div class="spinner"></div> Syncing…`;
 
-    // Always fetch the latest captured ads at click time — the closure variable
-    // may be stale if ads arrived after the popup was first rendered.
     const currentAds = await getAds(pageId);
 
     const result = await chrome.runtime.sendMessage({
@@ -103,17 +134,18 @@ function renderActive(pageId, ads, tab) {
     });
 
     if (result?.error) {
+      // If auth error, clear cached key and retry on next open
+      if (result.error.includes("Invalid API key") || result.error.includes("Missing API key")) {
+        await chrome.storage.local.remove("apiKey");
+      }
       syncBtn.disabled = false;
       syncBtn.textContent = `⚠️ ${result.error}`;
       return;
     }
 
-    // Clear stored ads for this page
     await chrome.runtime.sendMessage({ type: "CLEAR_ADS", pageId });
-    // Update badge
     chrome.action.setBadgeText({ text: "", tabId: tab.id });
 
-    // Show success
     $("success-title").textContent =
       result.imported > 0
         ? `${result.imported} new ad${result.imported !== 1 ? "s" : ""} added!`
@@ -130,10 +162,10 @@ function renderActive(pageId, ads, tab) {
     }
   };
 
-  // Check interceptor status; if off, nudge the user to refresh the page
+  // Interceptor status check
   setTimeout(() => {
     chrome.runtime.sendMessage({ type: "CHECK_INTERCEPTOR", tabId: tab.id }, (res) => {
-      const el = document.getElementById("interceptor-status");
+      const el = $("interceptor-status");
       if (!el) return;
       if (res?.active) {
         el.textContent = "✓ interceptor on";
@@ -142,13 +174,12 @@ function renderActive(pageId, ads, tab) {
         el.style.color = "#f59e0b";
       }
     });
-  }, 800); // slight delay to let the injection settle
+  }, 800);
 
-  // Poll for new ads every 2s while popup is open
+  // Poll for new ads every 2s
   const interval = setInterval(async () => {
     const fresh = await getAds(pageId);
     if (fresh.length !== ads.length) {
-      // Re-render without reopening views
       $("ad-count").textContent = fresh.length;
       $("new-count").textContent = fresh.length;
       if (fresh.length > 0 && syncBtn.disabled && syncBtn.textContent.includes("Waiting")) {
@@ -164,22 +195,13 @@ function renderActive(pageId, ads, tab) {
   window.addEventListener("unload", () => clearInterval(interval));
 }
 
-// ── Setup view ────────────────────────────────────────────────────────────────
-$("save-key-btn").onclick = async () => {
-  const key = $("api-key-input").value.trim();
-  if (!key) return;
-  await chrome.storage.local.set({ apiKey: key });
-  location.reload();
+// ── Login view ────────────────────────────────────────────────────────────────
+$("open-signal-btn").onclick = () => {
+  chrome.tabs.create({ url: `${SIGNAL_URL}/login` });
 };
 
-$("api-key-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") $("save-key-btn").click();
-});
-
-$("open-settings-link").onclick = (e) => {
-  e.preventDefault();
-  chrome.tabs.create({ url: `${SIGNAL_URL}/settings` });
-};
+// ── Success view ──────────────────────────────────────────────────────────────
+$("sync-more-btn").onclick = () => location.reload();
 
 // ── Footer ────────────────────────────────────────────────────────────────────
 $("disconnect-link").onclick = async (e) => {
@@ -187,8 +209,6 @@ $("disconnect-link").onclick = async (e) => {
   await chrome.storage.local.remove("apiKey");
   location.reload();
 };
-
-$("sync-more-btn").onclick = () => location.reload();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getAds(pageId) {
