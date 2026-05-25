@@ -54,20 +54,30 @@ function parseAds(text) {
         (bodyObj && bodyObj["text"]) ||
         snap["body_text"] || snap["message"] || null;
 
-      // Extract image URL — try static images first, then video thumbnail, then carousel card
+      // Extract image URL — try every known Meta field path
       var imageUrl = null;
       var imgs = snap["images"];
       if (Array.isArray(imgs) && imgs.length > 0) {
         imageUrl = imgs[0]["resized_image_url"] || imgs[0]["original_image_url"] || null;
       }
       if (!imageUrl) {
-        imageUrl = snap["video_preview_image_url"] || null;
+        imageUrl = snap["resized_image_url"] || snap["original_image_url"] || null;
+      }
+      if (!imageUrl) {
+        imageUrl = snap["video_preview_image_url"] || snap["videoPreviewImageUrl"] || null;
       }
       if (!imageUrl) {
         var cards = snap["cards"];
         if (Array.isArray(cards) && cards.length > 0) {
-          imageUrl = cards[0]["resized_image_url"] || cards[0]["video_preview_image_url"] || null;
+          imageUrl = cards[0]["resized_image_url"] || cards[0]["original_image_url"] ||
+                     cards[0]["video_preview_image_url"] || null;
         }
+      }
+      if (!imageUrl) {
+        // Last resort: any fbcdn URL embedded in the snapshot object
+        var snapStr = JSON.stringify(snap);
+        var cdnMatch = snapStr.match(/"(https:\/\/[^"]*fbcdn\.net[^"]*\.(?:jpg|jpeg|png|webp)[^"]*)"/);
+        if (cdnMatch) imageUrl = cdnMatch[1];
       }
 
       results.push({
@@ -75,7 +85,7 @@ function parseAds(text) {
         headline:    String(headline),
         body:        body ? String(body) : null,
         imageUrl:    imageUrl,
-        pageName:    node["page_name"] || snap["page_name"] || null,
+        pageName:    node["pageName"] || node["page_name"] || snap["pageName"] || snap["page_name"] || null,
         snapshotUrl: node["snapshot_url"] || snap["snapshot_url"] || null,
         firstSeen:   node["startDate"]    || node["start_date"]   || null,
         lastSeen:    node["endDate"]      || node["end_date"]     || null,

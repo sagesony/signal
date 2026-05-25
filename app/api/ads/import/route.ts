@@ -61,6 +61,16 @@ export async function POST(req: Request) {
         },
       })
     }
+  } else {
+    // If we now have a real page name but the competitor still has the fallback
+    // "Meta Page {id}" name, upgrade it
+    const isFallbackName = competitor.name === `Meta Page ${pageId}`
+    if (isFallbackName && pageName !== `Meta Page ${pageId}`) {
+      competitor = await prisma.competitor.update({
+        where: { id: competitor.id },
+        data: { name: pageName },
+      })
+    }
   }
 
   let imported = 0
