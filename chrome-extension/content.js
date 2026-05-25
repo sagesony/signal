@@ -32,6 +32,40 @@ window.addEventListener("message", function (event) {
 function parseAds(text) {
   var results = [];
 
+  // Scan the full raw text for pageName — works regardless of nesting depth.
+  // Meta's GraphQL uses camelCase internally; snake_case appears in some older responses.
+  var globalPageName = null;
+  var pnMatch = text.match(/"pageName"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (!pnMatch) pnMatch = text.match(/"page_name"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (pnMatch) globalPageName = pnMatch[1].replace(/\\"/g, '"');
+
+  function extractImage(node) {
+    // Structured field checks first
+    var snap = (node && node["snapshot"]) || {};
+    var imgs = snap["images"];
+    if (Array.isArray(imgs) && imgs.length > 0) {
+      var u = imgs[0]["resized_image_url"] || imgs[0]["original_image_url"];
+      if (u) return u;
+    }
+    var cards = snap["cards"];
+    if (Array.isArray(cards) && cards.length > 0) {
+      var u = cards[0]["resized_image_url"] || cards[0]["original_image_url"] ||
+              cards[0]["video_preview_image_url"];
+      if (u) return u;
+    }
+    var direct = snap["resized_image_url"] || snap["original_image_url"] ||
+                 snap["video_preview_image_url"] || snap["videoPreviewImageUrl"];
+    if (direct) return direct;
+
+    // Fallback: regex-scan the whole node JSON for the first fbcdn image URL
+    try {
+      var nodeStr = JSON.stringify(node);
+      var m = nodeStr.match(/"(https:\\?\/\\?\/[^"]*fbcdn\.net[^"]*\.(?:jpg|jpeg|png|webp))"/i);
+      if (m) return m[1].replace(/\\\/\g/g, '/').replace(/\\u0026/g, '&');
+    } catch (_) {}
+    return null;
+  }
+
   function walk(node) {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) { node.forEach(walk); return; }
@@ -47,45 +81,22 @@ function parseAds(text) {
 
       var headline =
         snap["title"] || snap["link_title"] || snap["link_description"] ||
-        node["page_name"] || "Untitled Ad";
+        node["pageName"] || node["page_name"] || "Untitled Ad";
 
       var body =
         (bodyObj && bodyObj["markup"] && bodyObj["markup"]["__html"]) ||
         (bodyObj && bodyObj["text"]) ||
         snap["body_text"] || snap["message"] || null;
 
-      // Extract image URL — try every known Meta field path
-      var imageUrl = null;
-      var imgs = snap["images"];
-      if (Array.isArray(imgs) && imgs.length > 0) {
-        imageUrl = imgs[0]["resized_image_url"] || imgs[0]["original_image_url"] || null;
-      }
-      if (!imageUrl) {
-        imageUrl = snap["resized_image_url"] || snap["original_image_url"] || null;
-      }
-      if (!imageUrl) {
-        imageUrl = snap["video_preview_image_url"] || snap["videoPreviewImageUrl"] || null;
-      }
-      if (!imageUrl) {
-        var cards = snap["cards"];
-        if (Array.isArray(cards) && cards.length > 0) {
-          imageUrl = cards[0]["resized_image_url"] || cards[0]["original_image_url"] ||
-                     cards[0]["video_preview_image_url"] || null;
-        }
-      }
-      if (!imageUrl) {
-        // Last resort: any fbcdn URL embedded in the snapshot object
-        var snapStr = JSON.stringify(snap);
-        var cdnMatch = snapStr.match(/"(https:\/\/[^"]*fbcdn\.net[^"]*\.(?:jpg|jpeg|png|webp)[^"]*)"/);
-        if (cdnMatch) imageUrl = cdnMatch[1];
-      }
+      var pageName = node["pageName"] || node["page_name"] ||
+                     snap["pageName"] || snap["page_name"] || globalPageName || null;
 
       results.push({
         externalId:  String(archiveId),
         headline:    String(headline),
         body:        body ? String(body) : null,
-        imageUrl:    imageUrl,
-        pageName:    node["pageName"] || node["page_name"] || snap["pageName"] || snap["page_name"] || null,
+        imageUrl:    extractImage(node),
+        pageName:    pageName,
         snapshotUrl: node["snapshot_url"] || snap["snapshot_url"] || null,
         firstSeen:   node["startDate"]    || node["start_date"]   || null,
         lastSeen:    node["endDate"]      || node["end_date"]     || null,
