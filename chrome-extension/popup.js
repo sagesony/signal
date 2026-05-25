@@ -86,10 +86,14 @@ function renderActive(pageId, ads, tab) {
     syncBtn.disabled = true;
     syncBtn.innerHTML = `<div class="spinner"></div> Syncing…`;
 
+    // Always fetch the latest captured ads at click time — the closure variable
+    // may be stale if ads arrived after the popup was first rendered.
+    const currentAds = await getAds(pageId);
+
     const result = await chrome.runtime.sendMessage({
       type: "SYNC_ADS",
       pageId,
-      ads,
+      ads: currentAds,
       signalUrl: SIGNAL_URL,
       apiKey,
     });
