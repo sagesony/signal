@@ -12,6 +12,7 @@ import {
   Zap,
   LogOut,
   ChevronRight,
+  Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -73,8 +74,31 @@ export function Sidebar() {
         })}
       </nav>
 
+      {/* Settings */}
+      <div className="mb-2">
+        {[{ href: "/settings", label: "Settings", icon: Settings }].map(({ href, label, icon: Icon }) => {
+          const active = pathname === href
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors group",
+                active
+                  ? "bg-indigo-600/12 text-indigo-400 font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              )}
+            >
+              <Icon className={cn("w-4 h-4 shrink-0", active ? "text-indigo-400" : "text-muted-foreground group-hover:text-foreground")} />
+              {label}
+              {active && <ChevronRight className="w-3 h-3 ml-auto opacity-60" />}
+            </Link>
+          )
+        })}
+      </div>
+
       {/* User */}
-      <div className="mt-4 pt-4 border-t border-border">
+      <div className="mt-0 pt-4 border-t border-border">
         <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg">
           <div className="w-7 h-7 rounded-full bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
             <span className="text-xs font-medium text-indigo-400">

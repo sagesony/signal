@@ -3,6 +3,7 @@ export interface Competitor {
   name: string
   website: string | null
   metaAdUrl: string | null
+  metaPageId: string | null
   logo: string | null
   industry: string | null
   userId: string

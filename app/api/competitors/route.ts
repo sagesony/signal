@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { name, website, metaAdUrl, industry } = await req.json()
+  const { name, website, metaAdUrl, metaPageId, industry } = await req.json()
 
   if (!name?.trim()) {
     return NextResponse.json({ error: "Name is required." }, { status: 400 })
@@ -38,6 +38,7 @@ export async function POST(req: Request) {
       name: name.trim(),
       website: website || null,
       metaAdUrl: metaAdUrl || null,
+      metaPageId: metaPageId || null,
       industry: industry || null,
       userId: session.user.id,
     },
