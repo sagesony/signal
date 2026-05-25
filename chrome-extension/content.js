@@ -54,10 +54,28 @@ function parseAds(text) {
         (bodyObj && bodyObj["text"]) ||
         snap["body_text"] || snap["message"] || null;
 
+      // Extract image URL — try static images first, then video thumbnail, then carousel card
+      var imageUrl = null;
+      var imgs = snap["images"];
+      if (Array.isArray(imgs) && imgs.length > 0) {
+        imageUrl = imgs[0]["resized_image_url"] || imgs[0]["original_image_url"] || null;
+      }
+      if (!imageUrl) {
+        imageUrl = snap["video_preview_image_url"] || null;
+      }
+      if (!imageUrl) {
+        var cards = snap["cards"];
+        if (Array.isArray(cards) && cards.length > 0) {
+          imageUrl = cards[0]["resized_image_url"] || cards[0]["video_preview_image_url"] || null;
+        }
+      }
+
       results.push({
         externalId:  String(archiveId),
         headline:    String(headline),
         body:        body ? String(body) : null,
+        imageUrl:    imageUrl,
+        pageName:    node["page_name"] || snap["page_name"] || null,
         snapshotUrl: node["snapshot_url"] || snap["snapshot_url"] || null,
         firstSeen:   node["startDate"]    || node["start_date"]   || null,
         lastSeen:    node["endDate"]      || node["end_date"]     || null,

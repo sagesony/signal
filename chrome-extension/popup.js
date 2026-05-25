@@ -57,9 +57,11 @@ function show(name) {
 function renderActive(pageId, ads, tab) {
   show("active");
 
-  $("comp-avatar").textContent = pageId[0] ?? "?";
-  $("comp-name").textContent   = `Page ${pageId}`;
-  $("comp-sub").textContent    = `ID: ${pageId}`;
+  const pageName = ads.find(a => a.pageName)?.pageName || null;
+  const displayName = pageName || `Page ${pageId}`;
+  $("comp-avatar").textContent = displayName[0]?.toUpperCase() ?? "?";
+  $("comp-name").textContent   = displayName;
+  $("comp-sub").textContent    = `Meta ID: ${pageId}`;
   $("ad-count").textContent    = ads.length;
   $("new-count").textContent   = ads.length > 0 ? ads.length : "—";
 

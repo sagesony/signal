@@ -33,14 +33,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "pageId and non-empty ads array required" }, { status: 400, headers: corsHeaders })
   }
 
-  const competitor = await prisma.competitor.findFirst({
+  // Derive competitor name from the first ad that has a pageName
+  const firstAdWithName = (ads as Record<string, unknown>[]).find(a => a.pageName)
+  const pageName = firstAdWithName?.pageName ? String(firstAdWithName.pageName) : `Meta Page ${pageId}`
+
+  // Find or auto-create competitor
+  let competitor = await prisma.competitor.findFirst({
     where: { userId: user.id, metaPageId: pageId },
   })
   if (!competitor) {
-    return NextResponse.json(
-      { error: `No competitor found with Meta page ID ${pageId}. Add this competitor to Signal first.` },
-      { status: 404, headers: corsHeaders },
-    )
+    // Also check by name in case they added it manually without a pageId
+    const byName = await prisma.competitor.findFirst({
+      where: { userId: user.id, name: pageName },
+    })
+    if (byName) {
+      // Attach the pageId to the existing competitor
+      competitor = await prisma.competitor.update({
+        where: { id: byName.id },
+        data: { metaPageId: pageId },
+      })
+    } else {
+      competitor = await prisma.competitor.create({
+        data: {
+          name: pageName,
+          metaPageId: pageId,
+          userId: user.id,
+        },
+      })
+    }
   }
 
   let imported = 0
@@ -68,6 +88,7 @@ export async function POST(req: Request) {
         data: {
           headline: String(ad.headline || "Untitled Ad"),
           body: ad.body ? String(ad.body) : null,
+          imageUrl: ad.imageUrl ? String(ad.imageUrl) : existing.imageUrl,
           lastSeen: parseTs(ad.lastSeen),
           isActive: Boolean(ad.isActive),
         },
@@ -80,6 +101,7 @@ export async function POST(req: Request) {
           externalId,
           headline: String(ad.headline || "Untitled Ad"),
           body: ad.body ? String(ad.body) : null,
+          imageUrl: ad.imageUrl ? String(ad.imageUrl) : null,
           landingUrl: ad.snapshotUrl ? String(ad.snapshotUrl) : null,
           platform: "meta",
           isActive: Boolean(ad.isActive),
