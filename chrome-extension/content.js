@@ -21,7 +21,10 @@ window.addEventListener("message", function (event) {
   var pageId = event.data.pageId;
   if (!text || !pageId) return;
 
+  console.log("[Signal] content.js got ADS_RAW len=" + text.length);
+
   var ads = parseAds(text);
+  console.log("[Signal] parseAds result count=" + ads.length);
   if (!ads.length) return;
 
   chrome.runtime.sendMessage({ type: "ADS_CAPTURED", pageId: pageId, ads: ads });
@@ -128,6 +131,8 @@ function parseAds(text) {
     console.log("[Signal] pageName found:", sample.pageName);
     console.log("[Signal] imageUrl found:", sample.imageUrl);
     console.log("[Signal] globalPageName:", globalPageName);
+  } else {
+    console.log("[Signal] 0 ads parsed — raw text start:", text.substring(0, 300));
   }
 
   return results;
