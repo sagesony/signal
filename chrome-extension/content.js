@@ -57,14 +57,19 @@ function parseAds(text) {
       if (u) return u;
     }
     var direct = snap["resized_image_url"] || snap["original_image_url"] ||
-                 snap["video_preview_image_url"] || snap["videoPreviewImageUrl"];
+                 snap["video_preview_image_url"] || snap["videoPreviewImageUrl"] ||
+                 snap["thumbnail_url"] || snap["thumbnailUrl"] ||
+                 snap["video_sd_url"] || snap["video_hd_url"];
+    if (direct && direct.indexOf("fbcdn") !== -1) return direct;
     if (direct) return direct;
 
-    // Fallback: regex-scan the whole node JSON for the first fbcdn image URL
+    // Fallback: regex-scan the whole node JSON for any fbcdn URL
     try {
       var nodeStr = JSON.stringify(node);
-      var m = nodeStr.match(/"(https:\\?\/\\?\/[^"]*fbcdn\.net[^"]*\.(?:jpg|jpeg|png|webp))"/i);
-      if (m) return m[1].replace(/\\\/\g/g, '/').replace(/\\u0026/g, '&');
+      var m = nodeStr.match(/"(https:(?:\\\/|\/){2}[^"\\]*fbcdn\.net[^"\\]*)"/i);
+      if (m) {
+        return m[1].replace(/\\\//g, "/").replace(/\\u0026/g, "&");
+      }
     } catch (_) {}
     return null;
   }
