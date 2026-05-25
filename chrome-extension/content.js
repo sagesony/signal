@@ -91,6 +91,13 @@ function parseAds(text) {
       var pageName = node["pageName"] || node["page_name"] ||
                      snap["pageName"] || snap["page_name"] || globalPageName || null;
 
+      // Debug: log raw node keys and snapshot keys on first ad only
+      if (results.length === 0) {
+        console.log("[Signal] node keys:", Object.keys(node));
+        console.log("[Signal] snap keys:", Object.keys(snap));
+        console.log("[Signal] snap sample:", JSON.stringify(snap).substring(0, 500));
+      }
+
       results.push({
         externalId:  String(archiveId),
         headline:    String(headline),
@@ -113,6 +120,14 @@ function parseAds(text) {
     var line = lines[i].trim();
     if (!line) continue;
     try { walk(JSON.parse(line)); } catch (_) {}
+  }
+
+  // Debug: log first captured ad so we can inspect the structure
+  if (results.length > 0) {
+    var sample = results[0];
+    console.log("[Signal] pageName found:", sample.pageName);
+    console.log("[Signal] imageUrl found:", sample.imageUrl);
+    console.log("[Signal] globalPageName:", globalPageName);
   }
 
   return results;
