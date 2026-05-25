@@ -1,26 +1,36 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, x-signal-key, Authorization",
+}
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: corsHeaders })
+}
+
 export async function POST(req: Request) {
   // Auth via extension key
   const key =
     req.headers.get("x-signal-key") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
-  if (!key) return NextResponse.json({ error: "Missing API key" }, { status: 401 })
+  if (!key) return NextResponse.json({ error: "Missing API key" }, { status: 401, headers: corsHeaders })
 
   const user = await prisma.user.findUnique({ where: { extensionKey: key } })
-  if (!user) return NextResponse.json({ error: "Invalid API key" }, { status: 401 })
+  if (!user) return NextResponse.json({ error: "Invalid API key" }, { status: 401, headers: corsHeaders })
 
   let body: { pageId?: string; ads?: unknown[] }
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers: corsHeaders })
   }
 
   const { pageId, ads } = body
   if (!pageId || !Array.isArray(ads) || ads.length === 0) {
-    return NextResponse.json({ error: "pageId and non-empty ads array required" }, { status: 400 })
+    return NextResponse.json({ error: "pageId and non-empty ads array required" }, { status: 400, headers: corsHeaders })
   }
 
   const competitor = await prisma.competitor.findFirst({
@@ -29,7 +39,7 @@ export async function POST(req: Request) {
   if (!competitor) {
     return NextResponse.json(
       { error: `No competitor found with Meta page ID ${pageId}. Add this competitor to Signal first.` },
-      { status: 404 },
+      { status: 404, headers: corsHeaders },
     )
   }
 
@@ -81,5 +91,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ imported, updated, total: ads.length, competitor: competitor.name })
+  return NextResponse.json({ imported, updated, total: ads.length, competitor: competitor.name }, { headers: corsHeaders })
 }
