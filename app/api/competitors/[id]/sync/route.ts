@@ -63,7 +63,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Sync failed"
     const isDocId = msg.startsWith("doc_id_stale")
+    // "needs_proxy" = no proxy key is set (SCRAPINGBEE_KEY missing)
+    const noKey = !process.env.SCRAPINGBEE_KEY
     const needsProxy =
+      noKey ||
+      msg.includes("SCRAPINGBEE") ||
       msg.includes("SCRAPERAPI_KEY") ||
       msg.includes("blocked") ||
       msg.includes("HTTP 4") ||
