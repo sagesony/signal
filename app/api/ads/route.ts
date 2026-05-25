@@ -77,3 +77,29 @@ export async function GET(req: Request) {
 
   return NextResponse.json({ ads: result, total, page, limit })
 }
+
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const competitorId = searchParams.get("competitorId")
+
+  const userCompetitorIds = (
+    await prisma.competitor.findMany({
+      where: { userId: session.user.id },
+      select: { id: true },
+    })
+  ).map((c) => c.id)
+
+  // If competitorId provided, scope to that one; otherwise delete all user's ads
+  const targetIds = competitorId
+    ? userCompetitorIds.filter((id) => id === competitorId)
+    : userCompetitorIds
+
+  const { count } = await prisma.ad.deleteMany({
+    where: { competitorId: { in: targetIds } },
+  })
+
+  return NextResponse.json({ deleted: count })
+}

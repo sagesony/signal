@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Settings, CheckCircle2, AlertCircle, ExternalLink, Loader2, Eye, EyeOff, Copy, Puzzle, RefreshCw } from "lucide-react"
+import { Settings, CheckCircle2, AlertCircle, ExternalLink, Loader2, Eye, EyeOff, Copy, Puzzle, RefreshCw, Trash2 } from "lucide-react"
 import { Topbar } from "@/components/layout/topbar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
@@ -18,6 +18,7 @@ export default function SettingsPage() {
   const [extensionKey, setExtensionKey] = useState<string | null>(null)
   const [generatingKey, setGeneratingKey] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
+  const [clearingAds, setClearingAds] = useState(false)
 
   useEffect(() => {
     fetch("/api/settings")
@@ -83,6 +84,20 @@ export default function SettingsPage() {
       toast({ title: "Failed to revoke key", variant: "destructive" })
     } finally {
       setGeneratingKey(false)
+    }
+  }
+
+  async function handleClearAllAds() {
+    if (!confirm("Delete all synced ads? This cannot be undone. Competitors will remain.")) return
+    setClearingAds(true)
+    try {
+      const res = await fetch("/api/ads", { method: "DELETE" })
+      const data = await res.json()
+      toast({ title: `${data.deleted} ads deleted`, description: "Re-sync from the extension to refresh." })
+    } catch {
+      toast({ title: "Failed to delete ads", variant: "destructive" })
+    } finally {
+      setClearingAds(false)
     }
   }
 
@@ -343,6 +358,23 @@ export default function SettingsPage() {
           <p className="text-[11px] text-muted-foreground pt-1">
             Then visit any competitor&apos;s Meta Ad Library page — the extension captures ads automatically as they load, and lets you sync them to Signal in one click.
           </p>
+        </div>
+
+        {/* Clear ads */}
+        <div className="pt-3 border-t border-border">
+          <p className="text-xs text-muted-foreground mb-3">
+            Delete all synced ads and start fresh. Competitors are kept.
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearAllAds}
+            disabled={clearingAds}
+            className="text-xs text-destructive hover:text-destructive border border-destructive/30 hover:bg-destructive/10"
+          >
+            {clearingAds ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+            {clearingAds ? "Deleting…" : "Clear all ads"}
+          </Button>
         </div>
 
         {/* API Key */}
