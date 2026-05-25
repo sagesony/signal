@@ -2,6 +2,11 @@
  * background.js — service worker
  */
 
+// Unique token per service-worker lifecycle.
+// Passed into the injected pageInterceptor so it can detect a stale
+// interceptor from a previous extension session and replace it cleanly.
+const SW_TOKEN = String(Date.now());
+
 // ── Inject interceptor when Ad Library tab loads ──────────────────────────────
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -15,8 +20,10 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === "INJECT_INTERCEPTOR" && sender.tab?.id) {
-    injectIntoTab(sender.tab.id);
+  if (msg.type === "INJECT_INTERCEPTOR") {
+    // Accept tabId from either content-script sender or explicit popup message
+    const tabId = sender.tab?.id ?? msg.tabId;
+    if (tabId) injectIntoTab(tabId);
     return false;
   }
 
@@ -64,6 +71,7 @@ function injectIntoTab(tabId) {
       target: { tabId },
       world: "MAIN",
       func: pageInterceptor,
+      args: [SW_TOKEN],
       injectImmediately: true,
     })
     .catch(() => {});
@@ -73,10 +81,24 @@ function injectIntoTab(tabId) {
 // Intercepts both fetch AND XMLHttpRequest so we catch Meta's GraphQL calls
 // regardless of which API they use internally.
 
-function pageInterceptor() {
-  if (window.__signalIntercepted) return;
+function pageInterceptor(token) {
+  // Same service-worker session already running — skip.
+  if (window.__signalToken === token) return;
+
+  // Different token = extension was reloaded. Restore originals before re-wrapping.
+  if (typeof window.__signalFetchOrig === "function") {
+    window.fetch = window.__signalFetchOrig;
+  }
+  if (typeof window.__signalXHROpenOrig === "function") {
+    XMLHttpRequest.prototype.open = window.__signalXHROpenOrig;
+  }
+  if (typeof window.__signalXHRSendOrig === "function") {
+    XMLHttpRequest.prototype.send = window.__signalXHRSendOrig;
+  }
+
+  window.__signalToken = token;
   window.__signalIntercepted = true;
-  console.log("[Signal] interceptor active ✓");
+  console.log("[Signal] interceptor active ✓ token=" + token);
 
   function handle(url, text) {
     if (!url || (url.indexOf("graphql") === -1)) return;
@@ -92,6 +114,7 @@ function pageInterceptor() {
 
   // ── fetch override ───────────────────────────────────────────────────────
   var _fetch = window.fetch;
+  window.__signalFetchOrig = _fetch;
   window.fetch = function () {
     var args = Array.prototype.slice.call(arguments);
     return _fetch.apply(this, args).then(function (response) {
@@ -106,6 +129,8 @@ function pageInterceptor() {
   // ── XMLHttpRequest override ──────────────────────────────────────────────
   var _open = XMLHttpRequest.prototype.open;
   var _send = XMLHttpRequest.prototype.send;
+  window.__signalXHROpenOrig = _open;
+  window.__signalXHRSendOrig = _send;
 
   XMLHttpRequest.prototype.open = function (method, url) {
     this._signalURL = url;

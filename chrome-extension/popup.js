@@ -43,6 +43,10 @@ const $ = (id) => document.getElementById(id);
   }
 
   // Load captured ads for this page
+  // Proactively re-inject interceptor — handles the case where the extension
+  // was reloaded but the Ad Library tab wasn't refreshed.
+  chrome.runtime.sendMessage({ type: "INJECT_INTERCEPTOR", tabId: tab.id });
+
   const ads = await getAds(pageId);
   renderActive(pageId, ads, tab);
 })();
@@ -126,11 +130,19 @@ function renderActive(pageId, ads, tab) {
     }
   };
 
-  // Check interceptor status and show in footer
-  chrome.runtime.sendMessage({ type: "CHECK_INTERCEPTOR", tabId: tab.id }, (res) => {
-    const el = document.getElementById("interceptor-status");
-    if (el) el.textContent = res?.active ? "✓ interceptor on" : "✗ interceptor off";
-  });
+  // Check interceptor status; if off, nudge the user to refresh the page
+  setTimeout(() => {
+    chrome.runtime.sendMessage({ type: "CHECK_INTERCEPTOR", tabId: tab.id }, (res) => {
+      const el = document.getElementById("interceptor-status");
+      if (!el) return;
+      if (res?.active) {
+        el.textContent = "✓ interceptor on";
+      } else {
+        el.textContent = "⚠ Refresh the Ad Library page";
+        el.style.color = "#f59e0b";
+      }
+    });
+  }, 800); // slight delay to let the injection settle
 
   // Poll for new ads every 2s while popup is open
   const interval = setInterval(async () => {
