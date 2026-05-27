@@ -32,7 +32,10 @@ export async function GET() {
   ).map((c) => c.id)
 
   if (competitorIds.length === 0) {
-    return NextResponse.json({ winning: [], newThisWeek: [], justWentDark: [], brands: [] })
+    return NextResponse.json({
+      provenPerformers: [], winning: [], gainingTraction: [],
+      creativeSurge: [], newThisWeek: [], justWentDark: [], brands: [],
+    })
   }
 
   const now = Date.now()
@@ -48,8 +51,25 @@ export async function GET() {
   })
 
   // ── Insight slices ────────────────────────────────────────────────────────
+
+  // 30+ days — highest conviction
+  const provenPerformers = allAds
+    .filter((ad) => ad.isActive && runDays(ad.firstSeen, ad.lastSeen) >= 30)
+    .sort((a, b) => runDays(b.firstSeen, b.lastSeen) - runDays(a.firstSeen, a.lastSeen))
+    .slice(0, 8)
+
+  // 14–29 days — working well
   const winning = allAds
     .filter((ad) => ad.isActive && runDays(ad.firstSeen, ad.lastSeen) >= 14)
+    .sort((a, b) => runDays(b.firstSeen, b.lastSeen) - runDays(a.firstSeen, a.lastSeen))
+    .slice(0, 8)
+
+  // 7–13 days active — survived first cut, still running
+  const gainingTraction = allAds
+    .filter((ad) => {
+      const d = runDays(ad.firstSeen, ad.lastSeen)
+      return ad.isActive && d >= 7 && d < 14
+    })
     .sort((a, b) => runDays(b.firstSeen, b.lastSeen) - runDays(a.firstSeen, a.lastSeen))
     .slice(0, 8)
 
@@ -77,6 +97,18 @@ export async function GET() {
     adsByBrand.get(ad.competitorId)!.push(ad)
   }
 
+  // Creative Surge — brands that launched 3+ ads in the last 7 days
+  const creativeSurge = competitors
+    .map((c) => {
+      const brandAds = adsByBrand.get(c.id) ?? []
+      const newAds = brandAds
+        .filter((ad) => new Date(ad.firstSeen).getTime() >= sevenDaysAgo)
+        .sort((a, b) => new Date(b.firstSeen).getTime() - new Date(a.firstSeen).getTime())
+      return { competitor: c, newAds, newCount: newAds.length }
+    })
+    .filter((b) => b.newCount >= 3)
+    .sort((a, b) => b.newCount - a.newCount)
+
   const brands = competitors
     .filter((c) => (adsByBrand.get(c.id)?.length ?? 0) > 0)
     .map((c) => {
@@ -98,5 +130,13 @@ export async function GET() {
       return bRecent - aRecent
     })
 
-  return NextResponse.json({ winning, newThisWeek, justWentDark, brands })
+  return NextResponse.json({
+    provenPerformers,
+    winning,
+    gainingTraction,
+    creativeSurge,
+    newThisWeek,
+    justWentDark,
+    brands,
+  })
 }

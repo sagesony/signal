@@ -6,13 +6,23 @@ import { ArrowLeft, Layers, Chrome, ExternalLink } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { InsightStrip } from "@/components/ads/insight-strip"
 import { BrandRow } from "@/components/ads/brand-row"
+import { SurgeBrandCard } from "@/components/ads/surge-brand-card"
 import { AdCard } from "@/components/ads/ad-card"
 import type { Ad, Competitor } from "@/types"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface SurgeBrand {
+  competitor: Competitor & { _count: { ads: number } }
+  newAds: Ad[]
+  newCount: number
+}
+
 interface FeedData {
+  provenPerformers: Ad[]
   winning: Ad[]
+  gainingTraction: Ad[]
+  creativeSurge: SurgeBrand[]
   newThisWeek: Ad[]
   justWentDark: Ad[]
   brands: {
@@ -176,7 +186,10 @@ function AdsPageInner() {
   // ── Main Creative Feed ────────────────────────────────────────────────────
   const totalAds    = feed?.brands.reduce((s, b) => s + b.competitor._count.ads, 0) ?? 0
   const totalBrands = feed?.brands.length ?? 0
-  const hasInsights = feed && (feed.winning.length + feed.newThisWeek.length + feed.justWentDark.length) > 0
+  const hasInsights = feed && (
+    feed.provenPerformers.length + feed.winning.length + feed.gainingTraction.length +
+    feed.creativeSurge.length + feed.newThisWeek.length + feed.justWentDark.length
+  ) > 0
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
@@ -200,18 +213,58 @@ function AdsPageInner() {
           {hasInsights && (
             <div className="mb-10">
               <InsightStrip
+                icon="🏆"
+                title="Proven Performers"
+                subtitle="Running 30+ days — competitors have serious conviction in these"
+                ads={feed.provenPerformers}
+                titleClass="text-yellow-400"
+              />
+              <InsightStrip
                 icon="🔥"
                 title="Winning Right Now"
-                subtitle="Running 14+ days — competitors are doubling down on these"
+                subtitle="Running 14+ days — still active and spending"
                 ads={feed.winning}
                 titleClass="text-amber-400"
               />
+              <InsightStrip
+                icon="🚀"
+                title="Gaining Traction"
+                subtitle="7–13 days old and still running — survived the first cut"
+                ads={feed.gainingTraction}
+                titleClass="text-indigo-400"
+              />
+
+              {/* Creative Surge — different card type */}
+              {feed.creativeSurge.length > 0 && (
+                <div className="mb-8">
+                  <div className="mb-3">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[15px] leading-none">⚡</span>
+                      <h2 className="text-sm font-semibold text-emerald-400">Creative Surge</h2>
+                    </div>
+                    <p className="text-[12px] text-muted-foreground pl-6">
+                      Brands in active testing mode — 3+ new ads this week
+                    </p>
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+                    {feed.creativeSurge.map(({ competitor, newAds, newCount }) => (
+                      <SurgeBrandCard
+                        key={competitor.id}
+                        competitor={competitor}
+                        newAds={newAds}
+                        newCount={newCount}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <InsightStrip
                 icon="✨"
                 title="Launched This Week"
                 subtitle="New creatives competitors just started testing"
                 ads={feed.newThisWeek}
-                titleClass="text-emerald-400"
+                titleClass="text-sky-400"
               />
               <InsightStrip
                 icon="💀"
