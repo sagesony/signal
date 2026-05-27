@@ -1,7 +1,15 @@
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+import { withAuth } from "next-auth/middleware"
 
-// Pass-through middleware — no auth required (single-user tool)
-export function middleware(_request: NextRequest) {
-  return NextResponse.next()
+// Protect all dashboard routes — redirect to /login if not authenticated
+export default withAuth({ pages: { signIn: "/login" } })
+
+export const config = {
+  matcher: [
+    "/ads/:path*",
+    "/competitors/:path*",
+    "/saved/:path*",
+    "/settings/:path*",
+    "/dashboard/:path*",
+    "/insights/:path*",
+  ],
 }

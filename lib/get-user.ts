@@ -1,6 +1,13 @@
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 
-/** Single-user tool — returns the first user in the database. */
+/**
+ * Returns the currently authenticated user from the session.
+ * Returns null if there is no valid session.
+ */
 export async function getUser() {
-  return prisma.user.findFirst()
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return null
+  return prisma.user.findUnique({ where: { id: session.user.id } })
 }
