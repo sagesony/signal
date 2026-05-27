@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { ChevronRight, ExternalLink } from "lucide-react"
@@ -14,6 +15,8 @@ interface BrandRowProps {
 }
 
 export function BrandRow({ competitor, ads, newCount }: BrandRowProps) {
+  const [logoError, setLogoError] = React.useState(false)
+
   const initials = competitor.name
     .split(" ")
     .filter(Boolean)
@@ -41,12 +44,13 @@ export function BrandRow({ competitor, ads, newCount }: BrandRowProps) {
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40">
         {/* Avatar */}
         <div className="w-8 h-8 rounded-lg overflow-hidden border border-border bg-muted shrink-0 flex items-center justify-center">
-          {(competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
+          {!logoError && (competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
             <Image
               src={competitor.logo ?? getBrandLogoUrl(competitor.metaPageId)!}
               alt={competitor.name}
               width={32} height={32}
               unoptimized
+              onError={() => setLogoError(true)}
               className="object-cover w-full h-full"
             />
           ) : (

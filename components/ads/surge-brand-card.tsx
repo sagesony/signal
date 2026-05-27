@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { getBrandLogoUrl } from "@/lib/utils"
@@ -12,6 +13,8 @@ interface SurgeBrandCardProps {
 }
 
 export function SurgeBrandCard({ competitor, newAds, newCount }: SurgeBrandCardProps) {
+  const [logoError, setLogoError] = React.useState(false)
+
   const initials = competitor.name
     .split(" ")
     .filter(Boolean)
@@ -31,12 +34,13 @@ export function SurgeBrandCard({ competitor, newAds, newCount }: SurgeBrandCardP
         {/* Brand header */}
         <div className="flex items-center gap-2 mb-3">
           <div className="w-7 h-7 rounded-lg overflow-hidden border border-border bg-muted shrink-0 flex items-center justify-center">
-            {(competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
+            {!logoError && (competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
               <Image
                 src={competitor.logo ?? getBrandLogoUrl(competitor.metaPageId)!}
                 alt={competitor.name}
                 width={28} height={28}
                 unoptimized
+                onError={() => setLogoError(true)}
                 className="object-cover w-full h-full"
               />
             ) : (

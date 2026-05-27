@@ -24,6 +24,7 @@ export function CompetitorCard({ competitor, adCount, onDeleted, onSynced }: Com
   const [menuOpen, setMenuOpen] = useState(false)
   const [localAdCount, setLocalAdCount] = useState(adCount)
   const [syncError, setSyncError] = useState<SyncError>(null)
+  const [logoError, setLogoError] = useState(false)
 
   async function handleSync() {
     setMenuOpen(false)
@@ -86,12 +87,13 @@ export function CompetitorCard({ competitor, adCount, onDeleted, onSynced }: Com
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg overflow-hidden border border-border bg-muted shrink-0 flex items-center justify-center">
-            {(competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
+            {!logoError && (competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
               <Image
                 src={competitor.logo ?? getBrandLogoUrl(competitor.metaPageId)!}
                 alt={competitor.name}
                 width={40} height={40}
                 unoptimized
+                onError={() => setLogoError(true)}
                 className="object-cover w-full h-full"
               />
             ) : (
