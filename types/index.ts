@@ -14,6 +14,7 @@ export interface Competitor {
 
 export interface Ad {
   id: string
+  externalId: string | null
   competitorId: string
   competitor: { id: string; name: string; logo: string | null; industry: string | null }
   headline: string

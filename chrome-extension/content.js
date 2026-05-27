@@ -56,6 +56,12 @@ function parseAds(text) {
               cards[0]["video_preview_image_url"];
       if (u) return u;
     }
+    var videos = snap["videos"];
+    if (Array.isArray(videos) && videos.length > 0) {
+      var u = videos[0]["video_preview_image_url"] || videos[0]["videoPreviewImageUrl"] ||
+              videos[0]["resized_image_url"] || videos[0]["original_image_url"];
+      if (u) return u;
+    }
     var direct = snap["resized_image_url"] || snap["original_image_url"] ||
                  snap["video_preview_image_url"] || snap["videoPreviewImageUrl"] ||
                  snap["thumbnail_url"] || snap["thumbnailUrl"] ||

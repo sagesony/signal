@@ -1,29 +1,25 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { getUser } from "@/lib/get-user"
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getUser()
+  if (!user) return NextResponse.json({ ads: [], total: 0, page: 1, limit: 24 })
 
   const { searchParams } = new URL(req.url)
-  const competitor = searchParams.get("competitor") ?? ""
-  const hookType = searchParams.get("hookType") ?? ""
-  const angleType = searchParams.get("angleType") ?? ""
-  const formatType = searchParams.get("formatType") ?? ""
-  const offerType = searchParams.get("offerType") ?? ""
-  const search = searchParams.get("search") ?? ""
+  const competitor  = searchParams.get("competitor") ?? ""
+  const hookType    = searchParams.get("hookType")   ?? ""
+  const formatType  = searchParams.get("formatType") ?? ""
+  const search      = searchParams.get("search")     ?? ""
   const longRunning = searchParams.get("longRunning") === "1"
-  const page = parseInt(searchParams.get("page") ?? "1")
-  const limit = parseInt(searchParams.get("limit") ?? "24")
+  const page        = parseInt(searchParams.get("page")  ?? "1")
+  const limit       = parseInt(searchParams.get("limit") ?? "24")
 
-  // Long-running = lastSeen at least 14 days after firstSeen
   const LONG_RUNNING_MS = 14 * 24 * 60 * 60 * 1000
 
   const userCompetitorIds = (
     await prisma.competitor.findMany({
-      where: { userId: session.user.id },
+      where: { userId: user.id },
       select: { id: true },
     })
   ).map((c) => c.id)
@@ -31,32 +27,20 @@ export async function GET(req: Request) {
   const where: Record<string, unknown> = {
     competitorId: { in: userCompetitorIds },
     ...(competitor ? { competitorId: competitor } : {}),
-    ...(hookType ? { hookType } : {}),
-    ...(angleType ? { angleType } : {}),
+    ...(hookType   ? { hookType }   : {}),
     ...(formatType ? { formatType } : {}),
-    ...(offerType ? { offerType } : {}),
     ...(search
-      ? {
-          OR: [
-            { headline: { contains: search } },
-            { body: { contains: search } },
-          ],
-        }
+      ? { OR: [{ headline: { contains: search } }, { body: { contains: search } }] }
       : {}),
-    // For long-running: lastSeen must be >= firstSeen + 14 days.
-    // SQLite raw comparison: lastSeen - firstSeen >= LONG_RUNNING_MS
-    // We achieve this by fetching all and post-filtering, or using a raw query.
-    // For simplicity with SQLite, we post-filter after fetching.
   }
 
-  // Fetch all matching (pre-pagination) so we can post-filter on run duration
   const allAds = await prisma.ad.findMany({
     where,
     include: {
       competitor: { select: { id: true, name: true, logo: true, industry: true } },
-      savedAds: { where: { userId: session.user.id }, select: { id: true } },
+      savedAds: { where: { userId: user.id }, select: { id: true } },
     },
-    orderBy: { lastSeen: "desc" },
+    orderBy: [{ isActive: "desc" }, { lastSeen: "desc" }],
   })
 
   const filtered = longRunning
@@ -66,10 +50,9 @@ export async function GET(req: Request) {
       })
     : allAds
 
-  const total = filtered.length
+  const total     = filtered.length
   const paginated = filtered.slice((page - 1) * limit, page * limit)
-
-  const result = paginated.map((ad) => ({
+  const result    = paginated.map((ad) => ({
     ...ad,
     isSaved: ad.savedAds.length > 0,
     savedAds: undefined,
@@ -79,26 +62,23 @@ export async function GET(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getUser()
+  if (!user) return NextResponse.json({ error: "No user found" }, { status: 404 })
 
   const { searchParams } = new URL(req.url)
   const competitorId = searchParams.get("competitorId")
 
   const userCompetitorIds = (
     await prisma.competitor.findMany({
-      where: { userId: session.user.id },
+      where: { userId: user.id },
       select: { id: true },
     })
   ).map((c) => c.id)
 
-  // If competitorId provided, scope to that one; otherwise delete all user's ads
-  const targetIds = competitorId
-    ? userCompetitorIds.filter((id) => id === competitorId)
-    : userCompetitorIds
-
   const { count } = await prisma.ad.deleteMany({
-    where: { competitorId: { in: targetIds } },
+    where: competitorId
+      ? { competitorId }
+      : { competitorId: { in: userCompetitorIds } },
   })
 
   return NextResponse.json({ deleted: count })

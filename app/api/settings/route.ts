@@ -1,31 +1,30 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { getUser } from "@/lib/get-user"
 import { randomBytes } from "crypto"
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getUser()
+  if (!user) return NextResponse.json({ error: "No user found" }, { status: 404 })
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+  const data = await prisma.user.findUnique({
+    where: { id: user.id },
     select: { metaAccessToken: true, extensionKey: true },
   })
 
   return NextResponse.json({
-    hasMetaToken: !!user?.metaAccessToken,
-    metaAccessToken: user?.metaAccessToken
-      ? `${user.metaAccessToken.slice(0, 6)}…${user.metaAccessToken.slice(-4)}`
+    hasMetaToken: !!data?.metaAccessToken,
+    metaAccessToken: data?.metaAccessToken
+      ? `${data.metaAccessToken.slice(0, 6)}…${data.metaAccessToken.slice(-4)}`
       : null,
-    hasExtensionKey: !!user?.extensionKey,
-    extensionKey: user?.extensionKey ?? null,
+    hasExtensionKey: !!data?.extensionKey,
+    extensionKey: data?.extensionKey ?? null,
   })
 }
 
 export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getUser()
+  if (!user) return NextResponse.json({ error: "No user found" }, { status: 404 })
 
   const body = await req.json()
   const { metaAccessToken, generateExtensionKey, revokeExtensionKey } = body
@@ -35,17 +34,15 @@ export async function PATCH(req: Request) {
   if ("metaAccessToken" in body) {
     data.metaAccessToken = metaAccessToken?.trim() || null
   }
-
   if (generateExtensionKey) {
     data.extensionKey = randomBytes(32).toString("hex")
   }
-
   if (revokeExtensionKey) {
     data.extensionKey = null
   }
 
   const updated = await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: user.id },
     data,
     select: { metaAccessToken: true, extensionKey: true },
   })

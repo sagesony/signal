@@ -1,7 +1,3 @@
-export { default } from "next-auth/middleware"
-
-export const config = {
-  matcher: [
-    "/((?!api/auth|api/register|api/ads/import|api/settings|login|register|_next/static|_next/image|favicon.ico).*)",
-  ],
-}
+// Auth middleware removed — Signal is a single-user tool, no login required.
+// API routes that the Chrome extension calls are open by design.
+export {}

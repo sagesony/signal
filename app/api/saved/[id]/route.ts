@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { getUser } from "@/lib/get-user"
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getUser()
+  if (!user) return NextResponse.json({ error: "No user found" }, { status: 404 })
 
   const { notes, tags } = await req.json()
 
   const savedAd = await prisma.savedAd.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, userId: user.id },
   })
   if (!savedAd) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
