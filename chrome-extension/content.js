@@ -112,6 +112,27 @@ function parseAds(text) {
         console.log("[Signal] snap sample:", JSON.stringify(snap).substring(0, 500));
       }
 
+      // Try every known field name Meta has used for start/end dates
+      var startDate =
+        node["startDate"]         || node["start_date"]      ||
+        node["startDateRange"]    || node["start_date_range"] ||
+        node["startTime"]         || node["start_time"]      ||
+        snap["startDate"]         || snap["start_date"]      || null;
+
+      var endDate =
+        node["endDate"]           || node["end_date"]        ||
+        node["endDateRange"]      || node["end_date_range"]  ||
+        node["endTime"]           || node["end_time"]        ||
+        snap["endDate"]           || snap["end_date"]        || null;
+
+      // If it's a date-range object like { lower: 17..., upper: 17... }, grab the lower bound
+      if (startDate && typeof startDate === "object") {
+        startDate = startDate["lower"] || startDate["min"] || startDate["start"] || null;
+      }
+      if (endDate && typeof endDate === "object") {
+        endDate = endDate["upper"] || endDate["max"] || endDate["end"] || null;
+      }
+
       results.push({
         externalId:  String(archiveId),
         headline:    String(headline),
@@ -119,9 +140,9 @@ function parseAds(text) {
         imageUrl:    extractImage(node),
         pageName:    pageName,
         snapshotUrl: node["snapshot_url"] || snap["snapshot_url"] || null,
-        firstSeen:   node["startDate"]    || node["start_date"]   || null,
-        lastSeen:    node["endDate"]      || node["end_date"]     || null,
-        isActive:    !(node["endDate"]    || node["end_date"]),
+        firstSeen:   startDate,
+        lastSeen:    endDate,
+        isActive:    !endDate,
       });
       return;
     }

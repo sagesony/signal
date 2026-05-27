@@ -5,17 +5,28 @@ import { getUser } from "@/lib/get-user"
 export const dynamic = "force-dynamic"
 
 const SEVEN_DAYS_MS  = 7  * 24 * 60 * 60 * 1000
-const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
-function runDays(firstSeen: string | Date, lastSeen: string | Date) {
-  return Math.max(
-    0,
-    Math.floor(
-      (new Date(lastSeen).getTime() - new Date(firstSeen).getTime()) /
-        (1000 * 60 * 60 * 24)
-    )
-  )
+function runDays(
+  firstSeen: string | Date,
+  lastSeen: string | Date,
+  createdAt?: string | Date
+) {
+  const first = new Date(firstSeen).getTime()
+  let last = new Date(lastSeen).getTime()
+
+  // If lastSeen ≈ firstSeen (both defaulted to import time because Meta didn't
+  // return an endDate), use now as the upper bound for active ads so the
+  // duration grows as the user keeps syncing.
+  const diff = last - first
+  if (diff < 60_000) {
+    // less than 1 minute apart — dates weren't real, use createdAt→now
+    const created = createdAt ? new Date(createdAt).getTime() : first
+    last = Date.now()
+    return Math.max(0, Math.floor((last - created) / (1000 * 60 * 60 * 24)))
+  }
+
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)))
 }
 
 export async function GET() {
@@ -46,7 +57,7 @@ export async function GET() {
   const allAds = await prisma.ad.findMany({
     where: { competitorId: { in: competitorIds } },
     include: {
-      competitor: { select: { id: true, name: true, logo: true, industry: true } },
+      competitor: { select: { id: true, name: true, logo: true, industry: true, metaPageId: true } },
     },
   })
 
@@ -54,28 +65,36 @@ export async function GET() {
 
   // 30+ days — highest conviction
   const provenPerformers = allAds
-    .filter((ad) => ad.isActive && runDays(ad.firstSeen, ad.lastSeen) >= 30)
-    .sort((a, b) => runDays(b.firstSeen, b.lastSeen) - runDays(a.firstSeen, a.lastSeen))
+    .filter((ad) => ad.isActive && runDays(ad.firstSeen, ad.lastSeen, ad.createdAt) >= 30)
+    .sort((a, b) => runDays(b.firstSeen, b.lastSeen, b.createdAt) - runDays(a.firstSeen, a.lastSeen, a.createdAt))
     .slice(0, 8)
 
   // 14–29 days — working well
   const winning = allAds
-    .filter((ad) => ad.isActive && runDays(ad.firstSeen, ad.lastSeen) >= 14)
-    .sort((a, b) => runDays(b.firstSeen, b.lastSeen) - runDays(a.firstSeen, a.lastSeen))
+    .filter((ad) => ad.isActive && runDays(ad.firstSeen, ad.lastSeen, ad.createdAt) >= 14)
+    .sort((a, b) => runDays(b.firstSeen, b.lastSeen, b.createdAt) - runDays(a.firstSeen, a.lastSeen, a.createdAt))
     .slice(0, 8)
 
   // 7–13 days active — survived first cut, still running
   const gainingTraction = allAds
     .filter((ad) => {
-      const d = runDays(ad.firstSeen, ad.lastSeen)
+      const d = runDays(ad.firstSeen, ad.lastSeen, ad.createdAt)
       return ad.isActive && d >= 7 && d < 14
     })
-    .sort((a, b) => runDays(b.firstSeen, b.lastSeen) - runDays(a.firstSeen, a.lastSeen))
+    .sort((a, b) => runDays(b.firstSeen, b.lastSeen, b.createdAt) - runDays(a.firstSeen, a.lastSeen, a.createdAt))
     .slice(0, 8)
 
   const newThisWeek = allAds
-    .filter((ad) => new Date(ad.firstSeen).getTime() >= sevenDaysAgo)
-    .sort((a, b) => new Date(b.firstSeen).getTime() - new Date(a.firstSeen).getTime())
+    .filter((ad) => {
+      // Use the later of firstSeen or createdAt (whichever is more recent)
+      const t = Math.max(new Date(ad.firstSeen).getTime(), new Date(ad.createdAt).getTime())
+      return t >= sevenDaysAgo
+    })
+    .sort((a, b) => {
+      const at = Math.max(new Date(a.firstSeen).getTime(), new Date(a.createdAt).getTime())
+      const bt = Math.max(new Date(b.firstSeen).getTime(), new Date(b.createdAt).getTime())
+      return bt - at
+    })
     .slice(0, 8)
 
   const justWentDark = allAds
@@ -114,7 +133,7 @@ export async function GET() {
     .map((c) => {
       const brandAds = adsByBrand.get(c.id) ?? []
       const sorted = [...brandAds].sort(
-        (a, b) => runDays(b.firstSeen, b.lastSeen) - runDays(a.firstSeen, a.lastSeen)
+        (a, b) => runDays(b.firstSeen, b.lastSeen, b.createdAt) - runDays(a.firstSeen, a.lastSeen, a.createdAt)
       )
       const newCount = brandAds.filter((ad) => new Date(ad.firstSeen).getTime() >= sevenDaysAgo).length
       return {
