@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { getUser } from "@/lib/get-user"
 
+export const dynamic = "force-dynamic"
+
 const SEVEN_DAYS_MS  = 7  * 24 * 60 * 60 * 1000
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000

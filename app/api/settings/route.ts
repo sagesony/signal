@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db"
 import { getUser } from "@/lib/get-user"
 import { randomBytes } from "crypto"
 
+export const dynamic = "force-dynamic"
+
 export async function GET() {
   const user = await getUser()
   if (!user) return NextResponse.json({ error: "No user found" }, { status: 404 })

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { getUser } from "@/lib/get-user"
 
+export const dynamic = "force-dynamic"
+
 export async function GET(req: Request) {
   const user = await getUser()
   if (!user) return NextResponse.json({ ads: [], total: 0, page: 1, limit: 24 })

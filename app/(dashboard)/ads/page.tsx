@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { ArrowLeft, Layers, Chrome, ExternalLink } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -99,7 +99,7 @@ function EmptyState() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function AdsPage() {
+function AdsPageInner() {
   const searchParams  = useSearchParams()
   const router        = useRouter()
   const brandId       = searchParams.get("brand")
@@ -244,5 +244,24 @@ export default function AdsPage() {
         </>
       )}
     </div>
+  )
+}
+
+// Suspense wrapper required for useSearchParams() in Next.js App Router
+export default function AdsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-6xl mx-auto animate-fade-in">
+          <div className="mb-7">
+            <div className="h-6 w-36 bg-muted rounded animate-pulse mb-1" />
+            <div className="h-4 w-52 bg-muted rounded animate-pulse" />
+          </div>
+          <FeedSkeletons />
+        </div>
+      }
+    >
+      <AdsPageInner />
+    </Suspense>
   )
 }
