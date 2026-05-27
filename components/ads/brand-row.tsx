@@ -1,9 +1,10 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { ChevronRight, ExternalLink } from "lucide-react"
 import { AdCardCompact } from "./ad-card-compact"
-import { formatRelative } from "@/lib/utils"
+import { formatRelative, getBrandLogoUrl } from "@/lib/utils"
 import type { Ad, Competitor } from "@/types"
 
 interface BrandRowProps {
@@ -39,8 +40,18 @@ export function BrandRow({ competitor, ads, newCount }: BrandRowProps) {
       {/* Brand header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40">
         {/* Avatar */}
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-900/60 to-violet-900/40 border border-indigo-500/20 flex items-center justify-center shrink-0">
-          <span className="text-xs font-bold text-indigo-300">{initials}</span>
+        <div className="w-8 h-8 rounded-lg overflow-hidden border border-border bg-muted shrink-0 flex items-center justify-center">
+          {(competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
+            <Image
+              src={competitor.logo ?? getBrandLogoUrl(competitor.metaPageId)!}
+              alt={competitor.name}
+              width={32} height={32}
+              unoptimized
+              className="object-cover w-full h-full"
+            />
+          ) : (
+            <span className="text-xs font-bold text-indigo-300">{initials}</span>
+          )}
         </div>
 
         {/* Name + meta */}

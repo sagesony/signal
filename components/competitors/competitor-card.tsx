@@ -4,7 +4,7 @@ import { useState } from "react"
 import Image from "next/image"
 import { ExternalLink, Trash2, Layers, MoreHorizontal, RefreshCw, AlertCircle, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { formatDate, INDUSTRY_LABELS } from "@/lib/utils"
+import { formatDate, getBrandLogoUrl, INDUSTRY_LABELS } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import type { Competitor } from "@/types"
 
@@ -86,8 +86,14 @@ export function CompetitorCard({ competitor, adCount, onDeleted, onSynced }: Com
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg overflow-hidden border border-border bg-muted shrink-0 flex items-center justify-center">
-            {competitor.logo ? (
-              <Image src={competitor.logo} alt={competitor.name} width={40} height={40} className="object-cover w-full h-full" />
+            {(competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
+              <Image
+                src={competitor.logo ?? getBrandLogoUrl(competitor.metaPageId)!}
+                alt={competitor.name}
+                width={40} height={40}
+                unoptimized
+                className="object-cover w-full h-full"
+              />
             ) : (
               <span className="text-xs font-bold text-muted-foreground">{initials}</span>
             )}

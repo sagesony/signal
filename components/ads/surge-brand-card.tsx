@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { getBrandLogoUrl } from "@/lib/utils"
 import type { Ad, Competitor } from "@/types"
 
 interface SurgeBrandCardProps {
@@ -29,8 +30,18 @@ export function SurgeBrandCard({ competitor, newAds, newCount }: SurgeBrandCardP
       <div className="p-3.5">
         {/* Brand header */}
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-900/60 to-violet-900/40 border border-indigo-500/20 flex items-center justify-center shrink-0">
-            <span className="text-[10px] font-bold text-indigo-300">{initials}</span>
+          <div className="w-7 h-7 rounded-lg overflow-hidden border border-border bg-muted shrink-0 flex items-center justify-center">
+            {(competitor.logo || getBrandLogoUrl(competitor.metaPageId)) ? (
+              <Image
+                src={competitor.logo ?? getBrandLogoUrl(competitor.metaPageId)!}
+                alt={competitor.name}
+                width={28} height={28}
+                unoptimized
+                className="object-cover w-full h-full"
+              />
+            ) : (
+              <span className="text-[10px] font-bold text-indigo-300">{initials}</span>
+            )}
           </div>
           <p className="text-xs font-semibold truncate">{competitor.name}</p>
         </div>

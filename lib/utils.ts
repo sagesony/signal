@@ -5,6 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** Returns the brand's Facebook page profile picture URL, or null if no metaPageId. */
+export function getBrandLogoUrl(metaPageId: string | null | undefined): string | null {
+  if (!metaPageId) return null
+  return `https://graph.facebook.com/${metaPageId}/picture?type=square`
+}
+
 export const LONG_RUNNING_DAYS = 14
 
 export function getRunDays(firstSeen: string | Date, lastSeen: string | Date): number {
